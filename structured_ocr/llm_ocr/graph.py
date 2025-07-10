@@ -22,7 +22,7 @@ from ..preprocess import (
 )
 from .llm import run_llm
 from .prompt import CHECKER_PROMPT, TEXT_EXTRACTION_PROMPT
-from .schema import CRITERIA_TO_RELATED_FIELDS_MAP, Criteria, TextContent
+from .schema import CRITERIA_TO_RELATED_FIELDS_MAP, TARGET_SCHEMA, Criteria
 
 load_dotenv()
 
@@ -54,7 +54,7 @@ class GraphState(BaseModel):
     image_bytes: Optional[bytes] = Field(default=None, exclude=True)  # Exclude from serialization
     image_base64: Optional[str] = Field(default=None)
     ocr_text_extraction_result: Optional[documentai.Document] = Field(default=None, exclude=True)  # Exclude from serialization
-    llm_text_extraction_result: Optional[TextContent] = Field(default=None)
+    llm_text_extraction_result: Optional[TARGET_SCHEMA] = Field(default=None)
     criteria: Optional[Criteria] = Field(default=None)
     correction_attemps: int = Field(default=0)
 
@@ -86,14 +86,14 @@ def ocr_text_extraction(state: GraphState) -> dict[str, documentai.Document]:
     return {"ocr_text_extraction_result": ocr_text_extraction_result}
 
 
-def llm_text_extraction(state: GraphState) -> dict[str, TextContent]:
+def llm_text_extraction(state: GraphState) -> dict[str, TARGET_SCHEMA]:
     """Run LLM for text extraction."""
     llm_text_extraction_result = run_llm(
         llm=llm_ocr,
         prompt=TEXT_EXTRACTION_PROMPT,
         reference_image=state.image,
         reference_text=state.ocr_text_extraction_result.text,
-        schema=TextContent,
+        schema=TARGET_SCHEMA,
     )
     print(f"🧠 LLM Text Extraction complete: {state.image_path}")
     return {"llm_text_extraction_result": llm_text_extraction_result}
@@ -119,7 +119,7 @@ def is_criterion(key: str, value: any) -> bool:
     return key != "reasons" and isinstance(value, int)
 
 
-def corrector(state: GraphState) -> dict[str, TextContent | int]:
+def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
     """Correct the results."""
     if state.correction_attemps >= MAX_CORRECTION:
         return {
@@ -156,7 +156,7 @@ def corrector(state: GraphState) -> dict[str, TextContent | int]:
         )
 
         # Prepare the current result as reference
-        result_string = state.llm_text_extraction_result.content
+        result_string = state.llm_text_extraction_result.model_dump_json()
 
         # Get corrected result
         corrected_result = run_llm(
@@ -164,7 +164,7 @@ def corrector(state: GraphState) -> dict[str, TextContent | int]:
             prompt=instructions,
             reference_image=state.image,
             reference_text=result_string,
-            schema=TextContent,
+            schema=TARGET_SCHEMA,
         )
 
         # Only update the fields that needed correction
@@ -248,7 +248,7 @@ def run_graph(image_path: str) -> dict:
     print(f"🚀 Start processing: {image_path}")
     result = graph.invoke({"image_path": image_path})
     print(f"🎉 Process complete: {image_path}")
-    llm_text_extraction_result: TextContent = result["llm_text_extraction_result"]
+    llm_text_extraction_result: TARGET_SCHEMA = result["llm_text_extraction_result"]
     return llm_text_extraction_result.model_dump()
 
 

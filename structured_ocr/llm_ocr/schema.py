@@ -54,3 +54,6 @@ CRITERIA_TO_RELATED_FIELDS: dict[str, list[str]] = {
     "player_data_accuracy": ["me", "teammates", "enemies"],
     "grouping": ["me", "teammates", "enemies"],
 }
+
+# For dynamic usage
+TARGET_SCHEMA = Match
