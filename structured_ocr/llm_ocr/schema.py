@@ -22,7 +22,7 @@ def s2hk(v: Optional[str]) -> Optional[str]:
 
 class Player(BaseModel):
     name: str = Field(description="The name of the player")
-    level: int = Field(description="The level of the player, where MAX is 1000")
+    level: int = Field(description="The level of the player")
     kills: int = Field(description="The number of kills the player has")
     deaths: int = Field(description="The number of deaths the player has")
     assists: int = Field(description="The number of assists the player has")

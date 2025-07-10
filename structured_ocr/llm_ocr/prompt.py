@@ -4,7 +4,7 @@ TEXT_EXTRACTION_PROMPT = """The given image shows a screenshot of a game scorebo
 2. Identify the highlighted player ("me") and assign to the 'me' field.
 3. For each player, extract the following fields:
    - name: string, the player's displayed name.
-   - level: int, the player's level, where MAX is 1000.
+   - level: int, the player's level.
    - kills: int, number of kills.
    - assists: int, number of assists.
    - deaths: int, number of deaths.
