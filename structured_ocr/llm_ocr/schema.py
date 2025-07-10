@@ -32,7 +32,8 @@ class Player(BaseModel):
 
 class Match(BaseModel):
     side: Literal["Heroes", "Villains"] = Field(description="The side of the match as shown on top")
-    me: Player = Field(description="The player who is the me as highlighted")
+    me: Player = Field(description="The player who is in yellow highlight")
+    squad: list[Player] = Field(description="The players who are in green highlight")
     teammates: list[Player] = Field(description="The players who are in the same side as the me")
     enemies: list[Player] = Field(description="The players who are in the opposite side")
 

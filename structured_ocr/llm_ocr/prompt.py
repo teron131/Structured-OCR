@@ -11,8 +11,8 @@ TEXT_EXTRACTION_PROMPT = """The given image shows a screenshot of a game scorebo
    - kd: float, K/D ratio.
    - score: int, the player's score.
 4. Group players into:
-   - 'me': the highlighted player.
-   - 'teammates': list of players on the same side as 'me', excluding 'me'.
+   - 'me': the player in yellow highlight.
+   - 'squad': list of players in green highlight.
    - 'enemies': list of players on the opposing side.
 5. Ensure numeric values are parsed correctly (e.g., decimals to floats).
 6. Output ONLY the JSON object conforming to the Pydantic schema for Match."""
