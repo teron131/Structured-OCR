@@ -4,7 +4,7 @@ TEXT_EXTRACTION_PROMPT = """The given image shows a screenshot of a game scorebo
 2. Identify the highlighted player ("me") and assign to the 'me' field.
 3. For each player, extract the following fields:
    - name: string, the player's displayed name.
-   - level: int, the player's level where MAX is 1000.
+   - level: int, the player's level, where MAX is 1000.
    - kills: int, number of kills.
    - assists: int, number of assists.
    - deaths: int, number of deaths.
@@ -23,11 +23,10 @@ CHECKER_PROMPT = """Be a rigorous and strict checker and grade whether the follo
 Verification Checklist:
 1. Team Names:
    - Verify team names 'Heroes' and 'Villains' are correctly identified.
+   - Indistinguishabilities such as 'I' and 'l', 'O' and '0', 'S' and '5', 'Z' and '2', are acceptable.
 2. Highlighted Player:
    - Confirm the 'me' player is correctly identified.
 3. Player Data Accuracy:
    - Check each player's name, level, kills, assists, deaths, K/D ratio, and score are accurately extracted.
 4. Grouping:
-   - Ensure teammates and enemies are correctly grouped relative to 'me'.
-5. JSON Format:
-   - Verify the output is valid JSON matching the Match schema."""
+   - Ensure teammates and enemies are correctly grouped relative to 'me'."""
