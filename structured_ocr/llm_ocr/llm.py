@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from PIL import Image
 from pydantic import BaseModel
 
-from ..preprocess import image_to_base64
+from ..utils import image_to_base64
 
 
 def run_llm(

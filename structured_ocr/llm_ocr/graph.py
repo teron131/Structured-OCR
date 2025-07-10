@@ -12,12 +12,7 @@ from rich import print
 from tqdm import tqdm
 
 from ..ocr import run_ocr
-from ..preprocess import (
-    PreprocessOptions,
-    image_to_base64,
-    image_to_bytes,
-    load_preprocess_image,
-)
+from ..utils import image_to_base64, image_to_bytes
 from .llm import run_llm
 from .prompt import CHECKER_PROMPT, TEXT_EXTRACTION_PROMPT
 from .schema import CRITERIA_TO_RELATED_FIELDS, TARGET_SCHEMA, Criteria
@@ -35,8 +30,6 @@ CRITERIA_THRESHOLD = 7
 class GraphState(BaseModel):
     model_config = {"arbitrary_types_allowed": True}  # For PIL.Image
     image_path: str
-    preprocess: bool = Field(default=True)
-    preprocess_options: PreprocessOptions = Field(default_factory=PreprocessOptions)
     image: Optional[Image.Image] = Field(default=None, exclude=True)  # Exclude from serialization
     image_bytes: Optional[bytes] = Field(default=None, exclude=True)  # Exclude from serialization
     image_base64: Optional[str] = Field(default=None)
@@ -46,24 +39,17 @@ class GraphState(BaseModel):
     correction_attemps: int = Field(default=0)
 
 
-def image_preprocessing(state: GraphState) -> dict[str, Image.Image]:
-    """Load and preprocess the image."""
-    image = load_preprocess_image(
-        state.image_path,
-        preprocess=state.preprocess,
-        preprocess_options=state.preprocess_options,
-    )
-    # display_resize(image)
-    print(f"🖼️ Image Preprocessing complete: {state.image_path}")
-    return {"image": image}
-
-
 def format_conversion(state: GraphState) -> dict[str, bytes | str]:
     """Convert image to bytes and base64."""
-    image_bytes = image_to_bytes(state.image)
-    image_base64 = image_to_base64(state.image)
+    image = Image.open(state.image_path)
+    image_bytes = image_to_bytes(image)
+    image_base64 = image_to_base64(image)
     print(f"🔄 Format Conversion complete: {state.image_path}")
-    return {"image_bytes": image_bytes, "image_base64": image_base64}
+    return {
+        "image": image,
+        "image_bytes": image_bytes,
+        "image_base64": image_base64,
+    }
 
 
 def ocr_text_extraction(state: GraphState) -> dict[str, documentai.Document]:
@@ -193,15 +179,13 @@ def should_continue(state: GraphState) -> str:
 # Create the graph
 builder = StateGraph(GraphState)
 
-builder.add_node("image_preprocessing", image_preprocessing)
 builder.add_node("format_conversion", format_conversion)
 builder.add_node("ocr_text_extraction", ocr_text_extraction)
 builder.add_node("llm_text_extraction", llm_text_extraction, retry=RetryPolicy(max_attempts=3))
 builder.add_node("criteria_checker", criteria_checker, retry=RetryPolicy(max_attempts=3))
 builder.add_node("corrector", corrector, retry=RetryPolicy(max_attempts=3))
 
-builder.add_edge(START, "image_preprocessing")
-builder.add_edge("image_preprocessing", "format_conversion")
+builder.add_edge(START, "format_conversion")
 builder.add_edge("format_conversion", "ocr_text_extraction")
 builder.add_edge("ocr_text_extraction", "llm_text_extraction")
 builder.add_edge("llm_text_extraction", "criteria_checker")

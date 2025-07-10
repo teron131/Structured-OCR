@@ -1,3 +1,5 @@
+import base64
+import io
 from pathlib import Path
 
 import cv2
@@ -5,6 +7,34 @@ import numpy as np
 from google.cloud import documentai
 from IPython.display import display
 from PIL import Image
+
+
+def image_to_bytes(image: Image.Image) -> bytes:
+    """Convert an image to bytes.
+
+    Args:
+        image: The image to convert to bytes.
+
+    Returns:
+        bytes: The bytes of the image.
+    """
+    image_buffer = io.BytesIO()
+    image.save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
+    return image_bytes
+
+
+def image_to_base64(image: Image.Image) -> str:
+    """Convert an image to base64.
+
+    Args:
+        image: The image to convert to base64.
+
+    Returns:
+        str: The base64 of the image.
+    """
+    image_bytes = image_to_bytes(image)
+    return base64.b64encode(image_bytes).decode("utf-8")
 
 
 def get_mime_type(file_path: str) -> str:
