@@ -4,8 +4,6 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from google.cloud import documentai
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import RetryPolicy
 from PIL import Image
@@ -28,17 +26,6 @@ load_dotenv()
 
 # Previously, use Google Gemini directly instead of through OpenRouter due to some errors in validating structured output with nested Pydantic schemas.
 # Now, use Google Gemini for auto resizing the image (base64). Otherwise, it is required to resize the image or it will exceed the token limit.
-llm_ocr = ChatGoogleGenerativeAI(
-    model=os.getenv("LLM_OCR"),
-    temperature=0,
-    api_key=os.getenv("GOOGLE_API_KEY"),
-)
-llm_checker = ChatOpenAI(
-    model=os.getenv("LLM_CHECKER"),
-    temperature=0,
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1",
-)
 
 MAX_CORRECTION = 3
 CRITERIA_PERCENTAGE = 99
@@ -89,7 +76,7 @@ def ocr_text_extraction(state: GraphState) -> dict[str, documentai.Document]:
 def llm_text_extraction(state: GraphState) -> dict[str, TARGET_SCHEMA]:
     """Run LLM for text extraction."""
     llm_text_extraction_result = run_llm(
-        llm=llm_ocr,
+        model=os.getenv("LLM_OCR"),
         prompt=TEXT_EXTRACTION_PROMPT,
         reference_image=state.image,
         reference_text=state.ocr_text_extraction_result.text,
@@ -102,9 +89,9 @@ def llm_text_extraction(state: GraphState) -> dict[str, TARGET_SCHEMA]:
 def criteria_checker(state: GraphState) -> dict[str, Criteria]:
     """Check the criteria."""
     print(state.llm_text_extraction_result)
-    result_string = state.llm_text_extraction_result.content
+    result_string = state.llm_text_extraction_result.model_dump_json()
     criteria = run_llm(
-        llm=llm_checker,
+        model=os.getenv("LLM_CHECKER"),
         prompt=CHECKER_PROMPT,
         reference_image=state.image,
         reference_text=result_string,
@@ -160,7 +147,7 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
 
         # Get corrected result
         corrected_result = run_llm(
-            llm=llm_ocr,
+            model=os.getenv("LLM_OCR"),
             prompt=instructions,
             reference_image=state.image,
             reference_text=result_string,

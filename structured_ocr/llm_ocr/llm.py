@@ -1,5 +1,7 @@
-from langchain_core.language_models.chat_models import BaseChatModel
+import os
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from PIL import Image
 from pydantic import BaseModel
@@ -8,7 +10,7 @@ from ..preprocess import image_to_base64
 
 
 def run_llm(
-    llm: BaseChatModel,
+    model: str,
     prompt: str,
     reference_image: Image.Image = None,
     reference_text: str = None,
@@ -17,7 +19,7 @@ def run_llm(
     """Run a LLM with a system prompt, reference image, and reference text, and return a structured output.
 
     Args:
-        llm (BaseChatModel): The LLM to use.
+        model (str): The model to use.
         prompt (str): The prompt to pass to the LLM.
         reference_image (Image.Image): The image to pass to the LLM.
         reference_text (str): The text to pass to the LLM.
@@ -26,6 +28,20 @@ def run_llm(
     Returns:
         BaseModel: The structured output of the LLM.
     """
+    if "/" in model:
+        llm = ChatGoogleGenerativeAI(
+            model=model,
+            temperature=0,
+            api_key=os.getenv("GOOGLE_API_KEY"),
+        )
+    else:
+        llm = ChatOpenAI(
+            model=model,
+            temperature=0,
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+        )
+
     messages = [SystemMessage(prompt)]
 
     content = []
