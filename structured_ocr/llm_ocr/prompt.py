@@ -1,51 +1,33 @@
-TEXT_EXTRACTION_PROMPT = """The given image shows a scanned newspaper page and the given text is the OCR text results for reference. With the holistic overview of the layout, extract and organize the content into a structured format following these guidelines:
+TEXT_EXTRACTION_PROMPT = """The given image shows a screenshot of a game scoreboard with two teams: Heroes and Villains. The given text is the OCR text results for reference. With a holistic overview of the layout, extract and organize the content into a structured JSON format following these guidelines:
 
-1. Identify page metadata:
-   - Page section letter, number, title, usually from the top left corner (e.g. A15 影音生活)
-   - Publication date, usually from the top right corner (e.g. 20XX年X月XX日)
-   - The names of the author and photographer if present (e.g. 記者 XXX, 撰文: XXX, 攝影 XXX, XXX 攝)
-
-2. Extract main content:
-   - Preserve and identify all titles or headers and make them bolded with double asterisks (e.g. **titles**)
-   - Organize text into coherent paragraphs
-   - Maintain the logical flow and hierarchy of content
-   - Seperate each paragraph with an empty newline (i.e. **H1**\nXXX\n\nYYY\n\n**H2**\nZZZ)
-
-3. Identify any tables:
-    - Include table captions if present
-   - Extract table headers / captions and content
-   - Format as CSV in a single string (e.g. "Header1,Header2,Header3\nValue1,Value2,Value3\n...")
-
-4. Identify any images:
-   - Describe the location of each image on the page
-   - Include image captions if present"""
+1. Identify the two teams ('Heroes' and 'Villains') as shown at the top of each column.
+2. Identify the highlighted player ("me") and assign to the 'me' field.
+3. For each player, extract the following fields:
+   - name: string, the player's displayed name.
+   - level: int, the player's level.
+   - kills: int, number of kills.
+   - assists: int, number of assists.
+   - deaths: int, number of deaths.
+   - kd: float, K/D ratio.
+   - score: int, the player's score.
+4. Group players into:
+   - 'me': the highlighted player.
+   - 'teammates': list of players on the same side as 'me', excluding 'me'.
+   - 'enemies': list of players on the opposing side.
+5. Ensure numeric values are parsed correctly (e.g., decimals to floats).
+6. Output ONLY the JSON object conforming to the Pydantic schema for Match."""
 
 
-CHECKER_PROMPT = """Be a rigorous and strict checker and grade whether the following criteria are met on a scale of 0 to 10. 10 means perfect and 0 means the criteron is completely ignored. Approximately the score should be the percentage of the criteron has been met. If the criteria are not met, provide the reasons of judgement.
-
-The given image shows a scanned newspaper page and the completed organized result of the text extraction and image description. Thoroughly verify the result, identify any discrepancies, and correct all mistakes to ensure complete accuracy. If the fields are not present, they can be `None` or empty.  
+CHECKER_PROMPT = """Be a rigorous and strict checker and grade whether the following criteria are met on a scale of 0 to 10 for OCR extraction of the game scoreboard screenshot. 10 means perfect extraction. If criteria are not met, provide detailed reasons.
 
 Verification Checklist:
-1. Page Metadata:
-   - Verify the page section letter, number, and title are correctly extracted from the top left corner
-   - Confirm the publication date is accurate and in the format of YYYY-MM-DD or DD-MM-YYYY
-
-2. Text Content:
-   - Ensure all text content from the newspaper page is completely extracted in the entire page
-   - Confirm text is organized into coherent paragraphs with proper flow
-   - Check that all titles or headers are properly identified and formatted with double asterisks (e.g., **titles**)
-   - Verify paragraphs are properly separated with empty newlines (i.e., **H1**\nXXX\n\nYYY\n\n**H2**\nZZZ)
-   - Ensure no text content is missing, especially from complex layout areas
-
-3. Tables:
-   - Verify all tables from the page are extracted completely (could be empty)
-   - Check that table captions are correctly identified
-   - Confirm table content is properly formatted in CSV format
-   - Check that the title or caption is correctly extracted
-
-4. Images:
-   - Verify all images on the page are identified and described (could be empty)
-   - Ensure image descriptions do not include table content
-   - Confirm image descriptions are detailed, contextually relevant, and in Traditional Chinese
-   - Verify descriptions provide meaningful insights about the image content
-   - Check that the title or caption is correctly extracted."""
+1. Team Names:
+   - Verify team names 'Heroes' and 'Villains' are correctly identified.
+2. Highlighted Player:
+   - Confirm the 'me' player is correctly identified.
+3. Player Data Accuracy:
+   - Check each player's name, level, kills, assists, deaths, K/D ratio, and score are accurately extracted.
+4. Grouping:
+   - Ensure teammates and enemies are correctly grouped relative to 'me'.
+5. JSON Format:
+   - Verify the output is valid JSON matching the Match schema."""
