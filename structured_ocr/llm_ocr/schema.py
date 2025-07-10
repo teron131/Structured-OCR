@@ -32,14 +32,14 @@ class Player(BaseModel):
 
 class Match(BaseModel):
     side: Literal["Heroes", "Villains"] = Field(description="The side of the match as shown on top")
-    me: Player = Field(description="The player who is in yellow highlight")
+    me: Player = Field(description="The player who is in yellow highlight as in squad, or white as solo")
     squad: list[Player] = Field(description="The players who are in green highlight")
     teammates: list[Player] = Field(description="The players who are in the same side as the me")
     enemies: list[Player] = Field(description="The players who are in the opposite side")
 
 
 class Criteria(BaseModel):
-    """Criteria for the game scoreboard OCR extraction."""
+    """Criteria for LLM checker."""
 
     team_names: int = Field(description="Verify team names 'Heroes' and 'Villains' are correctly identified", ge=0, le=10)
     highlighted_player: int = Field(description="Confirm the 'me' player is correctly identified", ge=0, le=10)
@@ -49,6 +49,7 @@ class Criteria(BaseModel):
     reasons: str = Field(description="Provide detailed reasons for any criteria not met, with specific examples of errors or omissions")
 
 
+# Mapping to whitelisting mutables for LLM checker
 CRITERIA_TO_RELATED_FIELDS: dict[str, list[str]] = {
     "team_names": ["side"],
     "highlighted_player": ["me"],
