@@ -22,7 +22,7 @@ from ..preprocess import (
 )
 from .llm import run_llm
 from .prompt import CHECKER_PROMPT, TEXT_EXTRACTION_PROMPT
-from .schema import CRITERIA_TO_RELATED_FIELDS_MAP, TARGET_SCHEMA, Criteria
+from .schema import CRITERIA_TO_RELATED_FIELDS, TARGET_SCHEMA, Criteria
 
 load_dotenv()
 
@@ -132,8 +132,8 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
     if state.criteria:
         criteria_dict = state.criteria.model_dump()
         for criterion, score in criteria_dict.items():
-            if is_criterion(criterion, score) and score < CRITERIA_THRESHOLD and criterion in CRITERIA_TO_RELATED_FIELDS_MAP:
-                fields_to_correct.extend(CRITERIA_TO_RELATED_FIELDS_MAP[criterion])
+            if is_criterion(criterion, score) and score < CRITERIA_THRESHOLD and criterion in CRITERIA_TO_RELATED_FIELDS:
+                fields_to_correct.extend(CRITERIA_TO_RELATED_FIELDS[criterion])
         # Remove duplicates while preserving order
         fields_to_correct = list(dict.fromkeys(fields_to_correct))
 
