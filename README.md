@@ -25,7 +25,8 @@ This hybrid approach leverages the strengths of both technologies to produce sup
 Both Google Document AI and LLM services used in this project are very cost-effective:
 
 - Document AI: ~$1.5 per 1,000 pages
-- Gemini 2.0 Flash: ~\$0.1 per 1M tokens input and \$0.4 per 1M tokens output
+- Gemini 2.5 Pro: $1.25 per 1M tokens input and $10 per 1M tokens output
+- Gemini 2.5 Flash: $0.3 per 1M tokens input and $2.5 per 1M tokens output
 
 ## Architecture
 
@@ -35,17 +36,12 @@ The system combines traditional OCR with LLM capabilities to achieve superior st
 
 ### Components
 
-1. **Preprocessing** ([structured_ocr/preprocess/](structured_ocr/preprocess/)):
-
-   - Deskewing, white balance adjustment, clarity enhancement
-   - Optional contrast/brightness/denoising capabilities
-
-2. **OCR** ([structured_ocr/ocr/](structured_ocr/ocr/)):
+- **OCR** ([structured_ocr/ocr/](structured_ocr/ocr/)):
 
    - Google Document AI integration
    - Text extraction with detailed metadata
 
-3. **LLM-OCR** ([structured_ocr/llm_ocr/](structured_ocr/llm_ocr/)):
+- **LLM-OCR** ([structured_ocr/llm_ocr/](structured_ocr/llm_ocr/)):
 
    - Customizable prompts and schemas for any document type
    - Text extraction with layout understanding
@@ -53,7 +49,7 @@ The system combines traditional OCR with LLM capabilities to achieve superior st
    - Image description generation
    - Quality verification and correction using configurable criteria
 
-4. **Utilities** ([structured_ocr/utils.py](structured_ocr/utils.py)):
+- **Utilities** ([structured_ocr/utils.py](structured_ocr/utils.py)):
    - Helper functions for file handling
    - Visualization utilities
    - Document processing tools
