@@ -29,17 +29,18 @@ def run_llm(
         BaseModel: The structured output of the LLM.
     """
     if "/" in model:
-        llm = ChatGoogleGenerativeAI(
-            model=model,
-            temperature=0,
-            api_key=os.getenv("GOOGLE_API_KEY"),
-        )
-    else:
         llm = ChatOpenAI(
             model=model,
             temperature=0,
             api_key=os.getenv("OPENROUTER_API_KEY"),
             base_url="https://openrouter.ai/api/v1",
+        )
+    else:
+
+        llm = ChatGoogleGenerativeAI(
+            model=model,
+            temperature=0,
+            api_key=os.getenv("GOOGLE_API_KEY"),
         )
 
     messages = [SystemMessage(prompt)]
