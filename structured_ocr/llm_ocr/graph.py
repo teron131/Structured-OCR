@@ -23,8 +23,8 @@ load_dotenv()
 # Now, use Google Gemini for auto resizing the image (base64). Otherwise, it is required to resize the image or it will exceed the token limit.
 
 MAX_CORRECTION = 3
-CRITERIA_PERCENTAGE = 99
-CRITERIA_THRESHOLD = 7
+CRITERIA_MET_PERC = 99
+CRITERION_SCORE_THRESHOLD = 7
 
 
 class GraphState(BaseModel):
@@ -88,88 +88,80 @@ def criteria_checker(state: GraphState) -> dict[str, Criteria]:
     return {"criteria": criteria}
 
 
-def is_criterion(key: str, value: any) -> bool:
-    return key != "reasons" and isinstance(value, int)
-
-
 def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
-    """Correct the results."""
+    """Correct the results based on failing criteria."""
+    # Early return if max corrections exceeded
     if state.correction_attemps >= MAX_CORRECTION:
         return {
             "llm_text_extraction_result": state.llm_text_extraction_result,
             "correction_attemps": state.correction_attemps,
         }
 
-    # Determine which fields need correction
+    # Get failing criteria and related fields to correct
+    criteria_data = state.criteria.model_dump()
+    failing_criteria = {criterion: score for criterion, score in criteria_data.items() if criterion != "reasons" and isinstance(score, int) and score < CRITERION_SCORE_THRESHOLD}
+
+    if not failing_criteria:
+        print(f"📝 Corrector {state.correction_attemps + 1} complete (no corrections needed): {state.image_path}")
+        return {
+            "llm_text_extraction_result": state.llm_text_extraction_result,
+            "correction_attemps": MAX_CORRECTION + 1,  # Skip future attempts
+        }
+
+    # Get unique fields that need correction
     fields_to_correct = []
-    if state.criteria:
-        criteria_dict = state.criteria.model_dump()
-        for criterion, score in criteria_dict.items():
-            if is_criterion(criterion, score) and score < CRITERIA_THRESHOLD and criterion in CRITERIA_TO_RELATED_FIELDS:
-                fields_to_correct.extend(CRITERIA_TO_RELATED_FIELDS[criterion])
-        # Remove duplicates while preserving order
-        fields_to_correct = list(dict.fromkeys(fields_to_correct))
+    for criterion in failing_criteria:
+        if criterion in CRITERIA_TO_RELATED_FIELDS:
+            fields_to_correct.extend(CRITERIA_TO_RELATED_FIELDS[criterion])
+    fields_to_correct = list(dict.fromkeys(fields_to_correct))  # Remove duplicates, preserve order
 
-    llm_text_extraction_result = state.llm_text_extraction_result.model_copy()
+    # Build correction instructions
+    field_descriptions = [
+        f"{Criteria.model_fields[criterion].description} was found to be inadequate (score: {score}/{CRITERION_SCORE_THRESHOLD})"
+        for criterion, score in failing_criteria.items()
+        if criterion in Criteria.model_fields
+    ]
 
-    # If fields need correction, run the LLM to fix them
-    if fields_to_correct:
-        field_descriptions = []
-        for criterion, score in criteria_dict.items():
-            if is_criterion(criterion, score) and score < CRITERIA_THRESHOLD:
-                description = state.criteria.__class__.model_fields[criterion].description
-                field_descriptions.append(f"{description} was found to be inadequate (score: {score}/{CRITERIA_THRESHOLD})")
+    instructions = "\n".join(field_descriptions)
+    if state.criteria.reasons:
+        instructions += f"\nReasons for correction: {state.criteria.reasons}"
 
-        # Create targeted correction instructions
-        instructions = "\n".join(
-            [
-                "\n".join(field_descriptions),
-                f"Reasons for correction: {state.criteria.reasons if state.criteria else ''}",
-            ]
-        )
+    result_string = state.llm_text_extraction_result.model_dump_json()
 
-        # Prepare the current result as reference
-        result_string = state.llm_text_extraction_result.model_dump_json()
+    corrected_result = run_llm(
+        model=os.getenv("LLM_OCR"),
+        prompt=instructions,
+        reference_image=state.image,
+        reference_text=result_string,
+        schema=TARGET_SCHEMA,
+    )
 
-        # Get corrected result
-        corrected_result = run_llm(
-            model=os.getenv("LLM_OCR"),
-            prompt=instructions,
-            reference_image=state.image,
-            reference_text=result_string,
-            schema=TARGET_SCHEMA,
-        )
+    # Update only the specified fields
+    updated_result = state.llm_text_extraction_result.model_copy()
+    for field in fields_to_correct:
+        if hasattr(corrected_result, field):
+            setattr(updated_result, field, getattr(corrected_result, field))
 
-        # Only update the fields that needed correction
-        for field in fields_to_correct:
-            if hasattr(corrected_result, field):
-                setattr(llm_text_extraction_result, field, getattr(corrected_result, field))
-
-        correction_attemps = state.correction_attemps + 1
-    else:
-        # Skip further correction attempts if no fields need correction
-        correction_attemps = MAX_CORRECTION + 1
-
+    correction_attemps = state.correction_attemps + 1
     print(f"📝 Corrector {correction_attemps} complete: {state.image_path}")
 
     return {
-        "llm_text_extraction_result": llm_text_extraction_result,
+        "llm_text_extraction_result": updated_result,
         "correction_attemps": correction_attemps,
     }
 
 
 def should_continue(state: GraphState) -> str:
-    """Check the criteria."""
-    # Return the last result if the correction attempts exceed the maximum
+    """Check if criteria are met or max corrections exceeded."""
+    # Early return if max corrections exceeded
     if state.correction_attemps >= MAX_CORRECTION:
         return "valid"
 
-    # Calculate percentage of criteria met using integer scores instead of booleans
-    criteria_dict = state.criteria.model_dump()
-    valid_scores = [1 if (is_criterion(criterion, score) and score >= CRITERIA_THRESHOLD) else 0 for criterion, score in criteria_dict.items()]
-
-    percentage_met = sum(valid_scores) / len(valid_scores) * 100
-    is_valid = percentage_met > CRITERIA_PERCENTAGE
+    # Calculate percentage of criteria met
+    criteria_fields = {k: v for k, v in state.criteria.model_dump().items() if k != "reasons" and isinstance(v, int)}
+    valid_count = sum(1 for score in criteria_fields.values() if score >= CRITERION_SCORE_THRESHOLD)
+    percentage_met = (valid_count / len(criteria_fields)) * 100
+    is_valid = percentage_met >= CRITERIA_MET_PERC
 
     print(f"✅ Criteria check: {percentage_met:.1f}% met, valid={is_valid}: {state.image_path}")
 

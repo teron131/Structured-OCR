@@ -46,7 +46,7 @@ class Criteria(BaseModel):
     player_data_accuracy: int = Field(description="Check each player's name, level, kills, assists, deaths, K/D ratio, and score are accurately extracted", ge=0, le=10)
     grouping: int = Field(description="Ensure teammates and enemies are correctly grouped relative to 'me'", ge=0, le=10)
 
-    reasons: str = Field(description="Provide detailed reasons for any criteria not met, with specific examples of errors or omissions")
+    reasons: Optional[str] = Field(description="Provide detailed reasons for any criteria not met, with specific examples of errors or omissions")
 
 
 # Mapping to whitelisting mutables for LLM checker
