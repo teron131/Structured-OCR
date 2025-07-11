@@ -4,6 +4,7 @@ from typing import Optional
 
 from dotenv import load_dotenv
 from google.cloud import documentai
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import RetryPolicy
 from PIL import Image
@@ -13,18 +14,12 @@ from tqdm import tqdm
 
 from ..ocr import run_ocr
 from ..utils import image_to_base64, image_to_bytes
+from .configuration import Configuration
 from .llm import run_llm
 from .prompt import CHECKER_PROMPT, TEXT_EXTRACTION_PROMPT
 from .schema import CRITERIA_TO_RELATED_FIELDS, TARGET_SCHEMA, Criteria
 
 load_dotenv()
-
-# Previously, use Google Gemini directly instead of through OpenRouter due to some errors in validating structured output with nested Pydantic schemas.
-# Now, use Google Gemini for auto resizing the image (base64). Otherwise, it is required to resize the image or it will exceed the token limit.
-
-MAX_CORRECTION = 3
-CRITERIA_MET_PERC = 99
-CRITERION_SCORE_THRESHOLD = 7
 
 
 class GraphState(BaseModel):
@@ -39,8 +34,10 @@ class GraphState(BaseModel):
     correction_attemps: int = Field(default=0)
 
 
-def format_conversion(state: GraphState) -> dict[str, bytes | str]:
+def format_conversion(state: GraphState, config: RunnableConfig) -> dict[str, bytes | str]:
     """Convert image to bytes and base64."""
+    configuration = Configuration.from_runnable_config(config)
+
     image = Image.open(state.image_path)
     image_bytes = image_to_bytes(image)
     image_base64 = image_to_base64(image)
@@ -52,17 +49,21 @@ def format_conversion(state: GraphState) -> dict[str, bytes | str]:
     }
 
 
-def ocr_text_extraction(state: GraphState) -> dict[str, documentai.Document]:
+def ocr_text_extraction(state: GraphState, config: RunnableConfig) -> dict[str, documentai.Document]:
     """Run OCR on the image."""
+    configuration = Configuration.from_runnable_config(config)
+
     ocr_text_extraction_result = run_ocr(state.image_bytes)
     print(f"🔡 OCR complete: {state.image_path}")
     return {"ocr_text_extraction_result": ocr_text_extraction_result}
 
 
-def llm_text_extraction(state: GraphState) -> dict[str, TARGET_SCHEMA]:
+def llm_text_extraction(state: GraphState, config: RunnableConfig) -> dict[str, TARGET_SCHEMA]:
     """Run LLM for text extraction."""
+    configuration = Configuration.from_runnable_config(config)
+
     llm_text_extraction_result = run_llm(
-        model=os.getenv("LLM_OCR"),
+        model=configuration.llm_ocr,
         prompt=TEXT_EXTRACTION_PROMPT,
         reference_image=state.image,
         reference_text=state.ocr_text_extraction_result.text,
@@ -72,12 +73,14 @@ def llm_text_extraction(state: GraphState) -> dict[str, TARGET_SCHEMA]:
     return {"llm_text_extraction_result": llm_text_extraction_result}
 
 
-def criteria_checker(state: GraphState) -> dict[str, Criteria]:
+def criteria_checker(state: GraphState, config: RunnableConfig) -> dict[str, Criteria]:
     """Check the criteria."""
+    configuration = Configuration.from_runnable_config(config)
+
     print(state.llm_text_extraction_result)
     result_string = state.llm_text_extraction_result.model_dump_json()
     criteria = run_llm(
-        model=os.getenv("LLM_CHECKER"),
+        model=configuration.llm_checker,
         prompt=CHECKER_PROMPT,
         reference_image=state.image,
         reference_text=result_string,
@@ -88,10 +91,12 @@ def criteria_checker(state: GraphState) -> dict[str, Criteria]:
     return {"criteria": criteria}
 
 
-def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
+def corrector(state: GraphState, config: RunnableConfig) -> dict[str, TARGET_SCHEMA | int]:
     """Correct the results based on failing criteria."""
+    configuration = Configuration.from_runnable_config(config)
+
     # Early return if max corrections exceeded
-    if state.correction_attemps >= MAX_CORRECTION:
+    if state.correction_attemps >= configuration.max_correction:
         return {
             "llm_text_extraction_result": state.llm_text_extraction_result,
             "correction_attemps": state.correction_attemps,
@@ -99,13 +104,13 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
 
     # Get failing criteria and related fields to correct
     criteria_data = state.criteria.model_dump()
-    failing_criteria = {criterion: score for criterion, score in criteria_data.items() if criterion != "reasons" and isinstance(score, int) and score < CRITERION_SCORE_THRESHOLD}
+    failing_criteria = {criterion: score for criterion, score in criteria_data.items() if criterion != "reasons" and isinstance(score, int) and score < configuration.criterion_score_threshold}
 
     if not failing_criteria:
         print(f"📝 Corrector {state.correction_attemps + 1} complete (no corrections needed): {state.image_path}")
         return {
             "llm_text_extraction_result": state.llm_text_extraction_result,
-            "correction_attemps": MAX_CORRECTION + 1,  # Skip future attempts
+            "correction_attemps": configuration.max_correction + 1,  # Skip future attempts
         }
 
     # Get unique fields that need correction
@@ -117,7 +122,7 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
 
     # Build correction instructions
     field_descriptions = [
-        f"{Criteria.model_fields[criterion].description} was found to be inadequate (score: {score}/{CRITERION_SCORE_THRESHOLD})"
+        f"{Criteria.model_fields[criterion].description} was found to be inadequate (score: {score}/{configuration.criterion_score_threshold})"
         for criterion, score in failing_criteria.items()
         if criterion in Criteria.model_fields
     ]
@@ -129,7 +134,7 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
     result_string = state.llm_text_extraction_result.model_dump_json()
 
     corrected_result = run_llm(
-        model=os.getenv("LLM_OCR"),
+        model=configuration.llm_ocr,
         prompt=instructions,
         reference_image=state.image,
         reference_text=result_string,
@@ -151,25 +156,26 @@ def corrector(state: GraphState) -> dict[str, TARGET_SCHEMA | int]:
     }
 
 
-def should_continue(state: GraphState) -> str:
+def should_continue(state: GraphState, config: RunnableConfig) -> str:
     """Check if criteria are met or max corrections exceeded."""
+    configuration = Configuration.from_runnable_config(config)
+
     # Early return if max corrections exceeded
-    if state.correction_attemps >= MAX_CORRECTION:
+    if state.correction_attemps >= configuration.max_correction:
         return "valid"
 
     # Calculate percentage of criteria met
     criteria_fields = {k: v for k, v in state.criteria.model_dump().items() if k != "reasons" and isinstance(v, int)}
-    valid_count = sum(1 for score in criteria_fields.values() if score >= CRITERION_SCORE_THRESHOLD)
+    valid_count = sum(1 for score in criteria_fields.values() if score >= configuration.criterion_score_threshold)
     percentage_met = (valid_count / len(criteria_fields)) * 100
-    is_valid = percentage_met >= CRITERIA_MET_PERC
+    is_valid = percentage_met >= configuration.criteria_met_perc
 
     print(f"✅ Criteria check: {percentage_met:.1f}% met, valid={is_valid}: {state.image_path}")
 
     return "valid" if is_valid else "invalid"
 
 
-# Create the graph
-builder = StateGraph(GraphState)
+builder = StateGraph(GraphState, config_schema=Configuration)
 
 builder.add_node("format_conversion", format_conversion)
 builder.add_node("ocr_text_extraction", ocr_text_extraction)
