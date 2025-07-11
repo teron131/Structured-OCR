@@ -39,14 +39,20 @@ def format_conversion(state: GraphState, config: RunnableConfig) -> dict[str, by
     configuration = Configuration.from_runnable_config(config)
 
     image = Image.open(state.image_path)
-    image_bytes = image_to_bytes(image)
     image_base64 = image_to_base64(image)
-    print(f"🔄 Format Conversion complete: {state.image_path}")
-    return {
+
+    result = {
         "image": image,
-        "image_bytes": image_bytes,
         "image_base64": image_base64,
     }
+
+    # Only convert to bytes if OCR is enabled
+    if configuration.use_ocr:
+        image_bytes = image_to_bytes(image)
+        result["image_bytes"] = image_bytes
+
+    print(f"🔄 Format Conversion complete: {state.image_path}")
+    return result
 
 
 def ocr_text_extraction(state: GraphState, config: RunnableConfig) -> dict[str, documentai.Document]:
@@ -62,11 +68,16 @@ def llm_text_extraction(state: GraphState, config: RunnableConfig) -> dict[str, 
     """Run LLM for text extraction."""
     configuration = Configuration.from_runnable_config(config)
 
+    # Use OCR text if available, otherwise use empty string
+    reference_text = ""
+    if state.ocr_text_extraction_result is not None:
+        reference_text = state.ocr_text_extraction_result.text
+
     llm_text_extraction_result = run_llm(
         model=configuration.llm_ocr,
         prompt=TEXT_EXTRACTION_PROMPT,
         reference_image=state.image,
-        reference_text=state.ocr_text_extraction_result.text,
+        reference_text=reference_text,
         schema=TARGET_SCHEMA,
     )
     print(f"🧠 LLM Text Extraction complete: {state.image_path}")
@@ -156,6 +167,18 @@ def corrector(state: GraphState, config: RunnableConfig) -> dict[str, TARGET_SCH
     }
 
 
+def should_use_ocr(state: GraphState, config: RunnableConfig) -> str:
+    """Determine whether to use OCR or skip directly to LLM extraction."""
+    configuration = Configuration.from_runnable_config(config)
+
+    if configuration.use_ocr:
+        print(f"🔡 Using OCR for text extraction: {state.image_path}")
+        return "use_ocr"
+    else:
+        print(f"⏭️ Skipping OCR, using LLM directly: {state.image_path}")
+        return "skip_ocr"
+
+
 def should_continue(state: GraphState, config: RunnableConfig) -> str:
     """Check if criteria are met or max corrections exceeded."""
     configuration = Configuration.from_runnable_config(config)
@@ -184,7 +207,14 @@ builder.add_node("criteria_checker", criteria_checker, retry=RetryPolicy(max_att
 builder.add_node("corrector", corrector, retry=RetryPolicy(max_attempts=3))
 
 builder.add_edge(START, "format_conversion")
-builder.add_edge("format_conversion", "ocr_text_extraction")
+builder.add_conditional_edges(
+    "format_conversion",
+    should_use_ocr,
+    {
+        "use_ocr": "ocr_text_extraction",
+        "skip_ocr": "llm_text_extraction",
+    },
+)
 builder.add_edge("ocr_text_extraction", "llm_text_extraction")
 builder.add_edge("llm_text_extraction", "criteria_checker")
 builder.add_conditional_edges(

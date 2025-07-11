@@ -9,6 +9,7 @@ load_dotenv()
 
 
 class Configuration(BaseModel):
+    use_ocr: bool = Field(default=False, description="Whether to use Google Document AI OCR")
     llm_ocr: str = Field(default=os.getenv("LLM_OCR"), description="The LLM model to use for OCR")
     llm_checker: str = Field(default=os.getenv("LLM_CHECKER"), description="The LLM model to use for checking the criteria")
     max_correction: int = Field(default=3, description="The maximum number of corrections to attempt")

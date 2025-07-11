@@ -2,6 +2,20 @@
 
 A streamlined tool for extracting structured data from scanned documents using OCR and LLM techniques. Outputs are delivered as Pydantic models for easy integration.
 
+## Architecture
+
+The tool uses a graph-based processing pipeline that combines OCR and LLM techniques:
+
+![Processing Graph](graph.png)
+
+The pipeline includes:
+1. **Format Conversion**: Prepare image for processing
+2. **OCR Text Extraction**: Extract raw text using Google Document AI (optional)
+3. **LLM Text Extraction**: Structure data using language models
+4. **Criteria Checker**: Validate extraction quality
+5. **Corrector**: Fix issues based on validation feedback
+
+
 ## Key Features
 
 - **Custom Schemas**: Define your own Pydantic schemas for tailored data extraction.

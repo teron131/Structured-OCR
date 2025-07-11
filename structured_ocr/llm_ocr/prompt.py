@@ -49,7 +49,7 @@ Provide specific scores and detailed reasoning for each criterion:
      * kd: Kill/Death ratio (float, typically 0.00-99.99)
      * score: Total match score (integer)
    - Check for missing players, incorrect values, wrong data types
-   - Verify numerical accuracy and proper parsing of decimals
+   - Verify numerical accuracy and proper parsing of decimals, zeroes can be obmitted such as 0.10 & 0.1 are interchangeable
    - Assess completeness across all visible players in the screenshot
 
 4. PLAYER GROUPING (0-10):
